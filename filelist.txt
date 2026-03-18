@@ -1,0 +1,87 @@
+GbaTileQuantizer/
+│
+├── main.py
+├── requirements.txt
+├── README.md
+│
+├── app/
+│   ├── __init__.py
+│   ├── Application.py
+│   ├── Controller.py
+│   └── Jobs.py
+│
+├── config/
+│   ├── __init__.py
+│   ├── AppConfig.py
+│   ├── QuantizationConfig.py
+│   ├── TileReductionConfig.py
+│   ├── ExportConfig.py
+│   └── ProjectConfig.py
+│
+├── domain/
+│   ├── __init__.py
+│   ├── ColorRgb.py
+│   ├── GbaColor.py
+│   ├── Palette.py
+│   ├── Tile.py
+│   ├── TileMatch.py
+│   ├── TileMap.py
+│   ├── TileSet.py
+│   ├── IndexedImage.py
+│   ├── ImageGrid.py
+│   ├── QuantizationResult.py
+│   └── ProcessingResult.py
+│
+├── services/
+│   ├── __init__.py
+│   ├── ImageLoader.py
+│   ├── ImagePreprocessor.py
+│   ├── PaletteQuantizer.py
+│   ├── TileExtractor.py
+│   ├── TileHasher.py
+│   ├── TileDeduplicator.py
+│   ├── TileSimilarityCalculator.py
+│   ├── TileReducer.py
+│   ├── TileMapBuilder.py
+│   ├── GbaBinaryEncoder.py
+│   ├── PreviewRenderer.py
+│   ├── ExportService.py
+│   └── ProcessingPipeline.py
+│
+├── repositories/
+│   ├── __init__.py
+│   ├── ImageRepository.py
+│   └── ProjectRepository.py
+│
+├── gui/
+│   ├── __init__.py
+│   ├── MainWindow.py
+│   ├── MainWindowViewModel.py
+│   ├── widgets/
+│   │   ├── __init__.py
+│   │   ├── ImagePreviewWidget.py
+│   │   ├── PaletteWidget.py
+│   │   ├── TileSetWidget.py
+│   │   ├── TileMapWidget.py
+│   │   ├── ConfigPanelWidget.py
+│   │   └── LogWidget.py
+│   └── dialogs/
+│       ├── __init__.py
+│       ├── AboutDialog.py
+│       └── ExportDialog.py
+│
+├── utils/
+│   ├── __init__.py
+│   ├── FileUtils.py
+│   ├── ImageUtils.py
+│   ├── HashUtils.py
+│   ├── ValidationUtils.py
+│   └── LoggerFactory.py
+│
+└── tests/
+    ├── __init__.py
+    ├── test_palette_quantizer.py
+    ├── test_tile_extractor.py
+    ├── test_tile_deduplicator.py
+    ├── test_tile_reducer.py
+    └── test_gba_binary_encoder.py
