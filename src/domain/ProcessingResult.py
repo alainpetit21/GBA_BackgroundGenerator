@@ -4,6 +4,7 @@ Processing result domain model for the GBA Tile Quantizer.
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
+
 from domain.IndexedImage import IndexedImage
 from domain.Palette import Palette
 from domain.TileMap import TileMap

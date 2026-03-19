@@ -5,14 +5,7 @@ from __future__ import annotations
 from typing import Optional
 from PySide6.QtCore import Qt, QPoint
 from PySide6.QtGui import QPixmap, QWheelEvent, QMouseEvent
-from PySide6.QtWidgets import (
-    QFrame,
-    QGraphicsPixmapItem,
-    QGraphicsScene,
-    QGraphicsView,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QFrame, QGraphicsPixmapItem, QGraphicsScene, QGraphicsView, QVBoxLayout, QWidget
 
 
 class _GraphicsImageView(QGraphicsView):

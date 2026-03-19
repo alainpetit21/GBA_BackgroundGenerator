@@ -3,6 +3,7 @@ Tile extraction service for the GBA Tile Quantizer.
 """
 from __future__ import annotations
 from dataclasses import dataclass
+
 from domain.IndexedImage import IndexedImage
 from domain.Tile import Tile
 from domain.TileMap import TileMap

@@ -3,6 +3,7 @@ Top-level configuration object for the GBA Tile Quantizer project.
 """
 from __future__ import annotations
 from dataclasses import dataclass
+
 from config.QuantizationConfig import QuantizationConfig
 from config.TileReductionConfig import TileReductionConfig
 from config.ExportConfig import ExportConfig

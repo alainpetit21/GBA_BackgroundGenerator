@@ -4,23 +4,10 @@ Main application window for the GBA Tile Quantizer.
 from __future__ import annotations
 from pathlib import Path
 from typing import Optional
-
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QPixmap
-from PySide6.QtWidgets import (
-    QFileDialog,
-    QLabel,
-    QMainWindow,
-    QMessageBox,
-    QPushButton,
-    QSplitter,
-    QTextEdit,
-    QToolBar,
-    QVBoxLayout,
-    QWidget,
-    QHBoxLayout,
-    QGroupBox,
-)
+from PySide6.QtWidgets import QFileDialog, QMainWindow, QMessageBox, QPushButton, QSplitter, QTextEdit, QToolBar, \
+    QVBoxLayout, QWidget, QHBoxLayout, QGroupBox
 
 from app.Controller import Controller
 from gui.widgets.ImagePreviewWidget import ImagePreviewWidget

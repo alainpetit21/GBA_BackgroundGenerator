@@ -2,6 +2,7 @@
 Tile similarity calculation service for the GBA Tile Quantizer.
 """
 from __future__ import annotations
+
 from domain.Palette import Palette
 from domain.Tile import Tile
 

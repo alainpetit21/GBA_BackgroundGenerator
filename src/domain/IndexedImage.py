@@ -3,6 +3,7 @@ IndexedImage domain model for the GBA Tile Quantizer.
 """
 from __future__ import annotations
 from dataclasses import dataclass
+
 from domain.Palette import Palette
 
 

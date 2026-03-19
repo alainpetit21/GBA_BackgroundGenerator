@@ -3,6 +3,7 @@ TileSet domain model for the GBA Tile Quantizer.
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
+
 from domain.Tile import Tile
 from domain.TileMatch import TileMatch
 

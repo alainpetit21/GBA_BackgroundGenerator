@@ -3,6 +3,7 @@ GBA color domain model (15-bit BGR format).
 """
 from __future__ import annotations
 from dataclasses import dataclass
+
 from domain.ColorRgb import ColorRgb
 
 

@@ -1,22 +1,10 @@
 """
 Configuration panel widget for the GBA Tile Quantizer.
 """
-
 from __future__ import annotations
-
 from typing import Optional
-
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QCheckBox,
-    QComboBox,
-    QFormLayout,
-    QGroupBox,
-    QLineEdit,
-    QSpinBox,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QCheckBox, QComboBox, QFormLayout, QGroupBox, QLineEdit, QSpinBox, QVBoxLayout, QWidget
 
 from config.ExportConfig import ExportConfig
 from config.ProjectConfig import ProjectConfig

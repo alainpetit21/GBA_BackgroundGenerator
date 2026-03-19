@@ -2,6 +2,7 @@
 GBA binary encoding service for the GBA Tile Quantizer.
 """
 from __future__ import annotations
+
 from domain.Palette import Palette
 from domain.TileMap import TileMap
 from domain.TileSet import TileSet

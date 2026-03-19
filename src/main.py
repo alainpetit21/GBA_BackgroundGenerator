@@ -3,8 +3,9 @@ Entry point for the GBA Tile Quantizer application.
 Responsible only for bootstrapping the GUI application.
 """
 from PySide6.QtWidgets import QApplication
-from app.Application import Application
 import sys
+
+from app.Application import Application
 
 
 def main() -> None:

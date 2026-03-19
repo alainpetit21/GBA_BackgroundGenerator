@@ -4,6 +4,7 @@ Responsible for creating the controller and main window,
 wiring them together, and starting the UI.
 """
 from PySide6.QtWidgets import QApplication
+
 from app.Controller import Controller
 from gui.MainWindow import MainWindow
 

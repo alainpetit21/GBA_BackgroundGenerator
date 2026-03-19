@@ -2,6 +2,7 @@
 Tile map building service for the GBA Tile Quantizer.
 """
 from __future__ import annotations
+
 from domain.TileMap import TileMap, TileMapEntry
 
 

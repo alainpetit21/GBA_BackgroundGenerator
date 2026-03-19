@@ -3,6 +3,7 @@ Image preprocessing service for the GBA Tile Quantizer.
 """
 from __future__ import annotations
 from PIL import Image
+
 from config.QuantizationConfig import QuantizationConfig
 
 
