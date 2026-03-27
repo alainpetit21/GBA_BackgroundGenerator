@@ -11,7 +11,7 @@ class QuantizationConfig:
     Configuration used during image preprocessing and color quantization.
     """
 
-    max_colors: int = 16
+    palette_bank_count: int = 1
     dithering_enabled: bool = False
     quantization_method: str = "median_cut"
     tile_width: int = 8
@@ -25,11 +25,11 @@ class QuantizationConfig:
         Raises:
             ValueError: If one or more configuration values are invalid.
         """
-        if self.max_colors <= 0:
-            raise ValueError("max_colors must be greater than 0.")
+        if self.palette_bank_count <= 0:
+            raise ValueError("palette_bank_count must be greater than 0.")
 
-        if self.max_colors > 16:
-            raise ValueError("max_colors must be 16 or less for 4bpp output.")
+        if self.palette_bank_count > 16:
+            raise ValueError("palette_bank_count must be 16 or less for 4bpp output.")
 
         if self.tile_width != 8:
             raise ValueError("tile_width must be 8 in v1.")

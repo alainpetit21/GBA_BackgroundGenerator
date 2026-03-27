@@ -14,6 +14,7 @@ class TileMapEntry:
     tile_index: int
     horizontal_flip: bool = False
     vertical_flip: bool = False
+    palette_bank: int = 0
 
     def __post_init__(self) -> None:
         """
@@ -21,6 +22,9 @@ class TileMapEntry:
         """
         if self.tile_index < 0:
             raise ValueError("tile_index must be greater than or equal to 0.")
+
+        if self.palette_bank < 0 or self.palette_bank > 15:
+            raise ValueError("palette_bank must be between 0 and 15.")
 
 
 @dataclass
@@ -126,6 +130,7 @@ class TileMap:
         tile_index: int,
         horizontal_flip: bool = False,
         vertical_flip: bool = False,
+        palette_bank: int = 0,
     ) -> None:
         """
         Convenience method to set a tile map entry from raw values.
@@ -141,6 +146,7 @@ class TileMap:
             tile_index=tile_index,
             horizontal_flip=horizontal_flip,
             vertical_flip=vertical_flip,
+            palette_bank=palette_bank,
         )
         self.set_entry(x, y, entry)
 
@@ -185,15 +191,20 @@ class TileMap:
 
     def to_csv_string(self) -> str:
         """
-        Export the tile map as a CSV string using tile indices only.
+        Export the tile map as a CSV string including palette bank and flip flags.
 
         Returns:
             CSV representation of the tile map.
         """
         csv_lines: list[str] = []
 
-        for row in self.to_tile_index_rows():
-            csv_lines.append(",".join(str(tile_index) for tile_index in row))
+        for row in self.to_rows():
+            csv_lines.append(
+                ",".join(
+                    f"{entry.tile_index}:{entry.palette_bank}:{int(entry.horizontal_flip)}:{int(entry.vertical_flip)}"
+                    for entry in row
+                )
+            )
 
         return "\n".join(csv_lines)
 

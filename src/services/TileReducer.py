@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from config.TileReductionConfig import TileReductionConfig
-from domain.Palette import Palette
+from domain.PaletteSet import PaletteSet
 from domain.TileMap import TileMap, TileMapEntry
 from domain.TileSet import TileSet
 from domain.TileMatch import TileMatch
@@ -40,7 +40,7 @@ class TileReducer:
         self,
         tileset: TileSet,
         tilemap: TileMap,
-        palette: Palette,
+        palette_set: PaletteSet,
         config: TileReductionConfig,
     ) -> TileReductionResult:
         """
@@ -49,7 +49,7 @@ class TileReducer:
         Args:
             tileset: Source unique tileset.
             tilemap: Tilemap referencing the source tileset.
-            palette: Shared palette for similarity scoring.
+            palette_set: Palette banks used for similarity scoring.
             config: Tile reduction configuration.
 
         Returns:
@@ -64,8 +64,8 @@ class TileReducer:
         if tilemap is None:
             raise ValueError("tilemap cannot be None.")
 
-        if palette is None:
-            raise ValueError("palette cannot be None.")
+        if palette_set is None:
+            raise ValueError("palette_set cannot be None.")
 
         if config is None:
             raise ValueError("config cannot be None.")
@@ -86,74 +86,25 @@ class TileReducer:
             )
 
         reduced_tileset = TileSet(tiles=list(tileset.tiles[:config.max_tiles]))
-        index_remap = self._build_index_remap(
+        reduced_tilemap = self._remap_tilemap(
             source_tileset=tileset,
             reduced_tileset=reduced_tileset,
-            palette=palette,
+            tilemap=tilemap,
+            palette_set=palette_set,
             config=config,
         )
-        reduced_tilemap = self._remap_tilemap(tilemap, index_remap)
 
         return TileReductionResult(
             tileset=reduced_tileset,
             tilemap=reduced_tilemap,
         )
 
-    def _build_index_remap(
-        self,
-        source_tileset: TileSet,
-        reduced_tileset: TileSet,
-        palette: Palette,
-        config: TileReductionConfig,
-    ) -> dict[int, int]:
-        """
-        Build a mapping from original tile indices to reduced tile indices.
-
-        Args:
-            source_tileset: Original tileset.
-            reduced_tileset: Reduced tileset containing only kept tiles.
-            palette: Shared palette.
-            config: Tile reduction configuration.
-
-        Returns:
-            A dictionary mapping old tile indices to new tile indices.
-
-        Raises:
-            ValueError: If no suitable replacement is found.
-        """
-        index_remap: dict[int, int] = {}
-
-        # Tiles that remain in the reduced bank map to themselves.
-        for tile_index in range(reduced_tileset.size()):
-            index_remap[tile_index] = tile_index
-
-        # Tiles beyond the budget must be approximated.
-        for source_index in range(reduced_tileset.size(), source_tileset.size()):
-            source_tile = source_tileset.get_tile(source_index)
-
-            best_match = self._find_best_match(
-                source_tile=source_tile,
-                reduced_tileset=reduced_tileset,
-                palette=palette,
-                config=config,
-            )
-
-            if best_match.score > config.error_threshold > 0.0:
-                raise ValueError(
-                    f"No acceptable replacement found for tile {source_index}. "
-                    f"Best score was {best_match.score}, "
-                    f"which exceeds error_threshold={config.error_threshold}."
-                )
-
-            index_remap[source_index] = best_match.tile_index
-
-        return index_remap
-
     def _find_best_match(
         self,
         source_tile,
         reduced_tileset: TileSet,
-        palette: Palette,
+        palette_set: PaletteSet,
+        source_palette_bank: int,
         config: TileReductionConfig,
     ) -> TileMatch:
         """
@@ -162,7 +113,8 @@ class TileReducer:
         Args:
             source_tile: Tile to replace.
             reduced_tileset: Candidate reduced tileset.
-            palette: Shared palette.
+            palette_set: Palette banks.
+            source_palette_bank: Palette bank used by the source tile.
             config: Tile reduction configuration.
 
         Returns:
@@ -179,7 +131,8 @@ class TileReducer:
             first_tile=source_tile,
             second_tile=reduced_tileset.get_tile(0),
             metric=config.similarity_metric,
-            palette=palette,
+            first_palette=palette_set.get_palette(source_palette_bank),
+            second_palette=palette_set.get_palette(source_palette_bank),
         )
 
         for tile_index in range(1, reduced_tileset.size()):
@@ -188,7 +141,8 @@ class TileReducer:
                 first_tile=source_tile,
                 second_tile=candidate_tile,
                 metric=config.similarity_metric,
-                palette=palette,
+                first_palette=palette_set.get_palette(source_palette_bank),
+                second_palette=palette_set.get_palette(source_palette_bank),
             )
 
             if candidate_score < best_score:
@@ -204,17 +158,23 @@ class TileReducer:
 
     def _remap_tilemap(
         self,
+        source_tileset: TileSet,
+        reduced_tileset: TileSet,
         tilemap: TileMap,
-        index_remap: dict[int, int],
+        palette_set: PaletteSet,
+        config: TileReductionConfig,
     ) -> TileMap:
         """
-        Rebuild the tilemap using the reduced tile index mapping.
+        Rebuild the tilemap using the reduced tileset.
 
-        Existing flip flags are preserved.
+        Existing flip and palette-bank flags are preserved.
 
         Args:
+            source_tileset: Original tileset.
+            reduced_tileset: Reduced tileset.
             tilemap: Original tilemap.
-            index_remap: Mapping from original tile indices to reduced indices.
+            palette_set: Palette banks.
+            config: Tile reduction configuration.
 
         Returns:
             A new remapped TileMap.
@@ -224,7 +184,26 @@ class TileReducer:
         for y in range(tilemap.height):
             for x in range(tilemap.width):
                 original_entry = tilemap.get_entry(x, y)
-                remapped_index = index_remap[original_entry.tile_index]
+                remapped_index = original_entry.tile_index
+
+                if original_entry.tile_index >= reduced_tileset.size():
+                    source_tile = source_tileset.get_tile(original_entry.tile_index)
+                    best_match = self._find_best_match(
+                        source_tile=source_tile,
+                        reduced_tileset=reduced_tileset,
+                        palette_set=palette_set,
+                        source_palette_bank=original_entry.palette_bank,
+                        config=config,
+                    )
+
+                    if best_match.score > config.error_threshold > 0.0:
+                        raise ValueError(
+                            f"No acceptable replacement found for tile {original_entry.tile_index}. "
+                            f"Best score was {best_match.score}, "
+                            f"which exceeds error_threshold={config.error_threshold}."
+                        )
+
+                    remapped_index = best_match.tile_index
 
                 remapped_tilemap.set_entry(
                     x,
@@ -233,6 +212,7 @@ class TileReducer:
                         tile_index=remapped_index,
                         horizontal_flip=original_entry.horizontal_flip,
                         vertical_flip=original_entry.vertical_flip,
+                        palette_bank=original_entry.palette_bank,
                     ),
                 )
 

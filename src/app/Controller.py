@@ -121,6 +121,31 @@ class Controller:
 
         return f"Processing complete. {self.current_result.summary()}"
 
+    def build_processing_request(self) -> tuple[Path, ProjectConfig]:
+        """
+        Build a validated processing request for background execution.
+
+        Returns:
+            The image path and project configuration to process.
+        """
+        if self.current_image_path is None:
+            raise RuntimeError("No image loaded.")
+
+        self.project_config.validate()
+        return self.current_image_path, self.project_config
+
+    def set_current_result(self, result: ProcessingResult) -> None:
+        """
+        Store a processing result produced outside of the controller.
+
+        Args:
+            result: The newly computed processing result.
+        """
+        if result is None:
+            raise ValueError("result cannot be None.")
+
+        self.current_result = result
+
     def export_result(self, output_directory: str) -> str:
         """
         Export the current processing result.
@@ -199,7 +224,7 @@ class Controller:
         """
         return ProjectConfig(
             quantization=QuantizationConfig(
-                max_colors=16,
+                palette_bank_count=1,
                 dithering_enabled=False,
                 quantization_method="median_cut",
                 tile_width=8,

@@ -4,12 +4,14 @@ Main application window for the GBA Tile Quantizer.
 from __future__ import annotations
 from pathlib import Path
 from typing import Optional
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QThread
 from PySide6.QtGui import QAction, QPixmap
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMessageBox, QPushButton, QSplitter, QTextEdit, QToolBar, \
-    QVBoxLayout, QWidget, QHBoxLayout, QGroupBox
+    QVBoxLayout, QWidget, QHBoxLayout, QGroupBox, QLabel, QProgressBar
 
 from app.Controller import Controller
+from config.ProjectConfig import ProjectConfig
+from gui.ProcessingWorker import ProcessingWorker
 from gui.widgets.ImagePreviewWidget import ImagePreviewWidget
 from gui.widgets.ConfigPanelWidget import ConfigPanelWidget
 from gui.widgets.PaletteWidget import PaletteWidget
@@ -37,6 +39,11 @@ class MainWindow(QMainWindow):
         self.load_button: Optional[QPushButton] = None
         self.process_button: Optional[QPushButton] = None
         self.export_button: Optional[QPushButton] = None
+        self.progress_label: Optional[QLabel] = None
+        self.progress_bar: Optional[QProgressBar] = None
+        self.processing_thread: Optional[QThread] = None
+        self.processing_worker: Optional[ProcessingWorker] = None
+        self.is_processing = False
 
         self._build_ui()
         self._refresh_ui_state()
@@ -105,6 +112,7 @@ class MainWindow(QMainWindow):
 
         button_row = self._create_button_row()
         main_layout.addLayout(button_row)
+        self._create_status_widgets()
 
     def _create_preview_panel(self) -> QWidget:
         container = QWidget()
@@ -124,11 +132,11 @@ class MainWindow(QMainWindow):
 
         right_column.addWidget(
             self._wrap_in_group_box("Tileset", self.tileset_preview_widget),
-            stretch=1,
+            stretch=3,
         )
         right_column.addWidget(
             self._wrap_in_group_box("Palette", self.palette_widget),
-            stretch=0,
+            stretch=2,
         )
 
         top_row.addWidget(
@@ -188,6 +196,19 @@ class MainWindow(QMainWindow):
 
         return layout
 
+    def _create_status_widgets(self) -> None:
+        self.progress_label = QLabel("Idle")
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setVisible(False)
+        self.progress_bar.setTextVisible(True)
+        self.progress_bar.setFixedWidth(220)
+
+        status_bar = self.statusBar()
+        status_bar.addPermanentWidget(self.progress_label)
+        status_bar.addPermanentWidget(self.progress_bar)
+
     def _wrap_in_group_box(self, title: str, widget: QWidget) -> QGroupBox:
         group_box = QGroupBox(title)
         layout = QVBoxLayout()
@@ -223,24 +244,8 @@ class MainWindow(QMainWindow):
     def _on_process_clicked(self) -> None:
         try:
             self._apply_config_from_ui()
-
-            message = self.controller.process_image()
-            self._log(message)
-
-            result = self.controller.get_current_result()
-            if result is not None:
-                self._set_preview_from_png_bytes(
-                    self.quantized_preview_widget,
-                    result.preview_image_bytes,
-                )
-                self._set_preview_from_png_bytes(
-                    self.tileset_preview_widget,
-                    result.tileset_preview_image_bytes,
-                )
-                if self.palette_widget is not None:
-                    self.palette_widget.set_palette(result.palette)
-
-            self._refresh_ui_state()
+            image_path, config = self.controller.build_processing_request()
+            self._start_processing(image_path, config)
         except Exception as exception:  # noqa: BLE001
             self._show_error("Process Error", str(exception))
 
@@ -315,15 +320,90 @@ class MainWindow(QMainWindow):
     def _refresh_ui_state(self) -> None:
         has_loaded_image = self.controller.has_loaded_image()
         has_result = self.controller.has_result()
+        can_process = has_loaded_image and not self.is_processing
+        can_export = has_result and not self.is_processing
 
-        self.process_image_action.setEnabled(has_loaded_image)
-        self.export_action.setEnabled(has_result)
+        self.load_image_action.setEnabled(not self.is_processing)
+        self.process_image_action.setEnabled(can_process)
+        self.export_action.setEnabled(can_export)
 
+        if self.load_button is not None:
+            self.load_button.setEnabled(not self.is_processing)
         if self.process_button is not None:
-            self.process_button.setEnabled(has_loaded_image)
+            self.process_button.setEnabled(can_process)
 
         if self.export_button is not None:
-            self.export_button.setEnabled(has_result)
+            self.export_button.setEnabled(can_export)
+
+        if self.config_panel_widget is not None:
+            self.config_panel_widget.setEnabled(not self.is_processing)
+
+    def _start_processing(self, image_path: Path, config: ProjectConfig) -> None:
+        if self.processing_thread is not None:
+            raise RuntimeError("Processing is already running.")
+
+        self.is_processing = True
+        self._set_progress(0, "Starting processing...")
+        self._refresh_ui_state()
+        self._log(f"Processing started: {image_path}")
+
+        self.processing_thread = QThread(self)
+        self.processing_worker = ProcessingWorker(
+            processing_pipeline=self.controller.processing_pipeline,
+            image_path=image_path,
+            config=config,
+        )
+        self.processing_worker.moveToThread(self.processing_thread)
+
+        self.processing_thread.started.connect(self.processing_worker.run)
+        self.processing_worker.progress_changed.connect(self._set_progress)
+        self.processing_worker.finished.connect(self._on_processing_finished)
+        self.processing_worker.failed.connect(self._on_processing_failed)
+        self.processing_worker.finished.connect(self.processing_thread.quit)
+        self.processing_worker.failed.connect(self.processing_thread.quit)
+        self.processing_thread.finished.connect(self._cleanup_processing)
+
+        self.processing_thread.start()
+
+    def _on_processing_finished(self, result, message: str) -> None:
+        self.controller.set_current_result(result)
+        self._log(message)
+        self._set_progress(100, "Processing complete.")
+
+        self._set_preview_from_png_bytes(
+            self.quantized_preview_widget,
+            result.preview_image_bytes,
+        )
+        self._set_preview_from_png_bytes(
+            self.tileset_preview_widget,
+            result.tileset_preview_image_bytes,
+        )
+        if self.palette_widget is not None:
+            self.palette_widget.set_palette_set(result.palette_set)
+
+    def _on_processing_failed(self, message: str) -> None:
+        self._set_progress(0, "Processing failed.")
+        self._show_error("Process Error", message)
+
+    def _cleanup_processing(self) -> None:
+        if self.processing_worker is not None:
+            self.processing_worker.deleteLater()
+
+        if self.processing_thread is not None:
+            self.processing_thread.deleteLater()
+
+        self.processing_worker = None
+        self.processing_thread = None
+        self.is_processing = False
+        self._refresh_ui_state()
+
+    def _set_progress(self, value: int, message: str) -> None:
+        if self.progress_label is not None:
+            self.progress_label.setText(message)
+
+        if self.progress_bar is not None:
+            self.progress_bar.setVisible(True)
+            self.progress_bar.setValue(value)
 
     def _log(self, message: str) -> None:
         if self.log_text_edit is None:

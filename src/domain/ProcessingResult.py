@@ -5,8 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from domain.IndexedImage import IndexedImage
-from domain.Palette import Palette
+from domain.PaletteSet import PaletteSet
 from domain.TileMap import TileMap
 from domain.TileSet import TileSet
 
@@ -17,8 +16,9 @@ class ProcessingResult:
     Represents the final result produced by the processing pipeline.
     """
 
-    indexed_image: IndexedImage
-    palette: Palette
+    image_width: int
+    image_height: int
+    palette_set: PaletteSet
     tileset: TileSet
     tilemap: TileMap
     preview_image_bytes: Optional[bytes] = None
@@ -40,7 +40,16 @@ class ProcessingResult:
         Returns:
             The number of palette colors.
         """
-        return self.palette.size()
+        return self.palette_set.total_color_count()
+
+    def palette_bank_count(self) -> int:
+        """
+        Return the number of palette banks in the result.
+
+        Returns:
+            The number of palette banks.
+        """
+        return self.palette_set.palette_count()
 
     def map_width_in_tiles(self) -> int:
         """
@@ -67,7 +76,7 @@ class ProcessingResult:
         Returns:
             The image width.
         """
-        return self.indexed_image.width
+        return self.image_width
 
     def image_height_in_pixels(self) -> int:
         """
@@ -76,7 +85,7 @@ class ProcessingResult:
         Returns:
             The image height.
         """
-        return self.indexed_image.height
+        return self.image_height
 
     def tile_data_size_in_bytes(self) -> int:
         """
@@ -100,9 +109,9 @@ class ProcessingResult:
             The palette data size in bytes.
         """
         if padded:
-            return 16 * 2
+            return self.palette_bank_count() * 16 * 2
 
-        return self.palette.size() * 2
+        return self.palette_set.total_color_count() * 2
 
     def used_tile_indices(self) -> set[int]:
         """
@@ -123,6 +132,7 @@ class ProcessingResult:
         return (
             f"Image: {self.image_width_in_pixels()}x{self.image_height_in_pixels()} px, "
             f"Map: {self.map_width_in_tiles()}x{self.map_height_in_tiles()} tiles, "
+            f"Palette banks: {self.palette_bank_count()}, "
             f"Palette colors: {self.palette_color_count()}, "
             f"Unique tiles: {self.unique_tile_count()}, "
             f"Tile data: {self.tile_data_size_in_bytes()} bytes"

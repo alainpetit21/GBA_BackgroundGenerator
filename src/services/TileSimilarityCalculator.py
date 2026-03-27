@@ -17,7 +17,8 @@ class TileSimilarityCalculator:
         first_tile: Tile,
         second_tile: Tile,
         metric: str,
-        palette: Palette,
+        first_palette: Palette,
+        second_palette: Palette | None = None,
     ) -> int:
         """
         Calculate a similarity score between two tiles.
@@ -29,7 +30,8 @@ class TileSimilarityCalculator:
             first_tile: First tile to compare.
             second_tile: Second tile to compare.
             metric: Similarity metric name.
-            palette: Palette used to interpret palette indices as RGB colors.
+            first_palette: Palette used for the first tile.
+            second_palette: Palette used for the second tile. Defaults to the first.
 
         Returns:
             An integer similarity score.
@@ -44,17 +46,33 @@ class TileSimilarityCalculator:
         if not isinstance(second_tile, Tile):
             raise TypeError("second_tile must be a Tile instance.")
 
-        if not isinstance(palette, Palette):
-            raise TypeError("palette must be a Palette instance.")
+        if not isinstance(first_palette, Palette):
+            raise TypeError("first_palette must be a Palette instance.")
+
+        if second_palette is None:
+            second_palette = first_palette
+
+        if not isinstance(second_palette, Palette):
+            raise TypeError("second_palette must be a Palette instance.")
 
         if metric == "index_difference":
             return self._calculate_index_difference(first_tile, second_tile)
 
         if metric == "rgb_euclidean":
-            return self._calculate_rgb_euclidean(first_tile, second_tile, palette)
+            return self._calculate_rgb_euclidean(
+                first_tile,
+                second_tile,
+                first_palette,
+                second_palette,
+            )
 
         if metric == "rgb_weighted":
-            return self._calculate_rgb_weighted(first_tile, second_tile, palette)
+            return self._calculate_rgb_weighted(
+                first_tile,
+                second_tile,
+                first_palette,
+                second_palette,
+            )
 
         raise ValueError(f"Unsupported similarity metric: {metric}")
 
@@ -84,7 +102,8 @@ class TileSimilarityCalculator:
         self,
         first_tile: Tile,
         second_tile: Tile,
-        palette: Palette,
+        first_palette: Palette,
+        second_palette: Palette,
     ) -> int:
         """
         Calculate similarity using squared Euclidean RGB distance.
@@ -92,7 +111,8 @@ class TileSimilarityCalculator:
         Args:
             first_tile: First tile to compare.
             second_tile: Second tile to compare.
-            palette: Palette used to resolve indices into RGB values.
+            first_palette: Palette used to resolve indices in the first tile.
+            second_palette: Palette used to resolve indices in the second tile.
 
         Returns:
             Sum of squared RGB distances across all pixels.
@@ -100,8 +120,8 @@ class TileSimilarityCalculator:
         score = 0
 
         for first_pixel, second_pixel in zip(first_tile.pixels, second_tile.pixels):
-            first_color = palette.get_color(first_pixel)
-            second_color = palette.get_color(second_pixel)
+            first_color = first_palette.get_color(first_pixel)
+            second_color = second_palette.get_color(second_pixel)
 
             red_difference = first_color[0] - second_color[0]
             green_difference = first_color[1] - second_color[1]
@@ -119,7 +139,8 @@ class TileSimilarityCalculator:
         self,
         first_tile: Tile,
         second_tile: Tile,
-        palette: Palette,
+        first_palette: Palette,
+        second_palette: Palette,
     ) -> int:
         """
         Calculate similarity using weighted squared RGB distance.
@@ -130,7 +151,8 @@ class TileSimilarityCalculator:
         Args:
             first_tile: First tile to compare.
             second_tile: Second tile to compare.
-            palette: Palette used to resolve indices into RGB values.
+            first_palette: Palette used to resolve indices in the first tile.
+            second_palette: Palette used to resolve indices in the second tile.
 
         Returns:
             Sum of weighted squared RGB distances across all pixels.
@@ -138,8 +160,8 @@ class TileSimilarityCalculator:
         score = 0
 
         for first_pixel, second_pixel in zip(first_tile.pixels, second_tile.pixels):
-            first_color = palette.get_color(first_pixel)
-            second_color = palette.get_color(second_pixel)
+            first_color = first_palette.get_color(first_pixel)
+            second_color = second_palette.get_color(second_pixel)
 
             red_difference = first_color[0] - second_color[0]
             green_difference = first_color[1] - second_color[1]

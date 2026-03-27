@@ -78,6 +78,7 @@ class TileDeduplicator:
                             tile_index=unique_tile_index,
                             horizontal_flip=False,
                             vertical_flip=False,
+                            palette_bank=source_entry.palette_bank,
                         ),
                     )
                 else:
@@ -88,6 +89,7 @@ class TileDeduplicator:
                             tile_index=match.tile_index,
                             horizontal_flip=match.horizontal_flip,
                             vertical_flip=match.vertical_flip,
+                            palette_bank=source_entry.palette_bank,
                         ),
                     )
 

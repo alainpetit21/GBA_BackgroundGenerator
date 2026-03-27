@@ -4,8 +4,8 @@ Preview rendering service for the GBA Tile Quantizer.
 from __future__ import annotations
 from PIL import Image
 
-from domain.IndexedImage import IndexedImage
 from domain.Palette import Palette
+from domain.PaletteSet import PaletteSet
 from domain.Tile import Tile
 from domain.TileMap import TileMap
 from domain.TileSet import TileSet
@@ -13,40 +13,14 @@ from domain.TileSet import TileSet
 
 class PreviewRenderer:
     """
-    Service responsible for rendering preview images from indexed image,
-    tileset, and tilemap domain objects.
+    Service responsible for rendering preview images from tileset and tilemap data.
     """
-
-    def render_indexed_image(self, indexed_image: IndexedImage) -> Image.Image:
-        """
-        Render an IndexedImage into an RGB Pillow image.
-
-        Args:
-            indexed_image: Indexed image to render.
-
-        Returns:
-            A Pillow RGB image.
-
-        Raises:
-            ValueError: If indexed_image is None.
-        """
-        if indexed_image is None:
-            raise ValueError("indexed_image cannot be None.")
-
-        image = Image.new("RGB", (indexed_image.width, indexed_image.height))
-        pixel_access = image.load()
-
-        for y in range(indexed_image.height):
-            for x in range(indexed_image.width):
-                palette_index = indexed_image.get_pixel(x, y)
-                pixel_access[x, y] = indexed_image.palette.get_color(palette_index)
-
-        return image
 
     def render_tileset(
         self,
         tileset: TileSet,
-        palette: Palette,
+        palette_set: PaletteSet,
+        tilemap: TileMap | None = None,
         tiles_per_row: int = 16,
         tile_width: int = 8,
         tile_height: int = 8,
@@ -56,7 +30,8 @@ class PreviewRenderer:
 
         Args:
             tileset: TileSet to render.
-            palette: Palette used to convert tile indices into RGB values.
+            palette_set: Palette banks used to convert indices into RGB values.
+            tilemap: Optional tilemap used to infer a representative bank per tile.
             tiles_per_row: Number of tiles per row in the preview sheet.
             tile_width: Tile width in pixels.
             tile_height: Tile height in pixels.
@@ -70,8 +45,8 @@ class PreviewRenderer:
         if tileset is None:
             raise ValueError("tileset cannot be None.")
 
-        if palette is None:
-            raise ValueError("palette cannot be None.")
+        if palette_set is None:
+            raise ValueError("palette_set cannot be None.")
 
         if tiles_per_row <= 0:
             raise ValueError("tiles_per_row must be greater than 0.")
@@ -93,6 +68,10 @@ class PreviewRenderer:
 
         image = Image.new("RGB", (image_width, image_height), (0, 0, 0))
         pixel_access = image.load()
+        tileset_palette_bank_map = self._build_tileset_palette_bank_map(
+            tilemap=tilemap,
+            tileset_size=tileset.size(),
+        )
 
         for tile_index, tile in enumerate(tileset.tiles):
             tile_x = tile_index % tiles_per_row
@@ -104,7 +83,7 @@ class PreviewRenderer:
             self._draw_tile(
                 pixel_access=pixel_access,
                 tile=tile,
-                palette=palette,
+                palette=palette_set.get_palette(tileset_palette_bank_map[tile_index]),
                 destination_x=destination_x,
                 destination_y=destination_y,
             )
@@ -115,7 +94,7 @@ class PreviewRenderer:
         self,
         tilemap: TileMap,
         tileset: TileSet,
-        palette: Palette,
+        palette_set: PaletteSet,
         tile_width: int = 8,
         tile_height: int = 8,
     ) -> Image.Image:
@@ -125,7 +104,7 @@ class PreviewRenderer:
         Args:
             tilemap: TileMap to render.
             tileset: TileSet referenced by the map.
-            palette: Palette used to convert indices into RGB values.
+            palette_set: Palette banks used to convert indices into RGB values.
             tile_width: Tile width in pixels.
             tile_height: Tile height in pixels.
 
@@ -141,8 +120,8 @@ class PreviewRenderer:
         if tileset is None:
             raise ValueError("tileset cannot be None.")
 
-        if palette is None:
-            raise ValueError("palette cannot be None.")
+        if palette_set is None:
+            raise ValueError("palette_set cannot be None.")
 
         image_width = tilemap.width * tile_width
         image_height = tilemap.height * tile_height
@@ -168,30 +147,18 @@ class PreviewRenderer:
                 self._draw_tile(
                     pixel_access=pixel_access,
                     tile=tile,
-                    palette=palette,
+                    palette=palette_set.get_palette(entry.palette_bank),
                     destination_x=destination_x,
                     destination_y=destination_y,
                 )
 
         return image
 
-    def render_indexed_image_to_png_bytes(self, indexed_image: IndexedImage) -> bytes:
-        """
-        Render an IndexedImage and encode it as PNG bytes.
-
-        Args:
-            indexed_image: Indexed image to render.
-
-        Returns:
-            PNG-encoded bytes.
-        """
-        image = self.render_indexed_image(indexed_image)
-        return self._image_to_png_bytes(image)
-
     def render_tileset_to_png_bytes(
         self,
         tileset: TileSet,
-        palette: Palette,
+        palette_set: PaletteSet,
+        tilemap: TileMap | None = None,
         tiles_per_row: int = 16,
     ) -> bytes:
         """
@@ -199,7 +166,8 @@ class PreviewRenderer:
 
         Args:
             tileset: TileSet to render.
-            palette: Palette used for RGB conversion.
+            palette_set: Palette banks used for RGB conversion.
+            tilemap: Optional tilemap used to infer a representative bank per tile.
             tiles_per_row: Number of tiles per row.
 
         Returns:
@@ -207,7 +175,8 @@ class PreviewRenderer:
         """
         image = self.render_tileset(
             tileset=tileset,
-            palette=palette,
+            palette_set=palette_set,
+            tilemap=tilemap,
             tiles_per_row=tiles_per_row,
         )
         return self._image_to_png_bytes(image)
@@ -216,7 +185,7 @@ class PreviewRenderer:
         self,
         tilemap: TileMap,
         tileset: TileSet,
-        palette: Palette,
+        palette_set: PaletteSet,
     ) -> bytes:
         """
         Render a TileMap preview and encode it as PNG bytes.
@@ -224,7 +193,7 @@ class PreviewRenderer:
         Args:
             tilemap: TileMap to render.
             tileset: TileSet referenced by the map.
-            palette: Palette used for RGB conversion.
+            palette_set: Palette banks used for RGB conversion.
 
         Returns:
             PNG-encoded bytes.
@@ -232,7 +201,7 @@ class PreviewRenderer:
         image = self.render_tilemap(
             tilemap=tilemap,
             tileset=tileset,
-            palette=palette,
+            palette_set=palette_set,
         )
         return self._image_to_png_bytes(image)
 
@@ -259,6 +228,24 @@ class PreviewRenderer:
                 palette_index = tile.get_pixel(local_x, local_y)
                 rgb_color = palette.get_color(palette_index)
                 pixel_access[destination_x + local_x, destination_y + local_y] = rgb_color
+
+    def _build_tileset_palette_bank_map(
+        self,
+        tilemap: TileMap | None,
+        tileset_size: int,
+    ) -> dict[int, int]:
+        """
+        Build a representative palette bank lookup for each tile in the tileset.
+        """
+        palette_bank_map = {tile_index: 0 for tile_index in range(tileset_size)}
+
+        if tilemap is None:
+            return palette_bank_map
+
+        for entry in tilemap.entries:
+            palette_bank_map.setdefault(entry.tile_index, entry.palette_bank)
+
+        return palette_bank_map
 
     def _image_to_png_bytes(self, image: Image.Image) -> bytes:
         """

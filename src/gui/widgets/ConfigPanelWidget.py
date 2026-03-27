@@ -20,7 +20,7 @@ class ConfigPanelWidget(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
 
-        self.max_colors_spin_box: Optional[QSpinBox] = None
+        self.palette_bank_count_spin_box: Optional[QSpinBox] = None
         self.dithering_check_box: Optional[QCheckBox] = None
         self.pad_to_tile_grid_check_box: Optional[QCheckBox] = None
 
@@ -65,13 +65,16 @@ class ConfigPanelWidget(QWidget):
         form_layout = QFormLayout()
         group_box.setLayout(form_layout)
 
-        self.max_colors_spin_box = QSpinBox()
-        self.max_colors_spin_box.setRange(1, 16)
+        self.palette_bank_count_spin_box = QSpinBox()
+        self.palette_bank_count_spin_box.setRange(1, 16)
+        self.palette_bank_count_spin_box.setToolTip(
+            "Number of 16-color 4bpp palette banks available to the background."
+        )
 
         self.dithering_check_box = QCheckBox()
         self.pad_to_tile_grid_check_box = QCheckBox()
 
-        form_layout.addRow("Max colors", self.max_colors_spin_box)
+        form_layout.addRow("Palette banks (max 16)", self.palette_bank_count_spin_box)
         form_layout.addRow("Dithering", self.dithering_check_box)
         form_layout.addRow("Pad to tile grid", self.pad_to_tile_grid_check_box)
 
@@ -166,7 +169,9 @@ class ConfigPanelWidget(QWidget):
         if config is None:
             raise ValueError("config cannot be None.")
 
-        self.max_colors_spin_box.setValue(config.quantization.max_colors)
+        self.palette_bank_count_spin_box.setValue(
+            config.quantization.palette_bank_count
+        )
         self.dithering_check_box.setChecked(config.quantization.dithering_enabled)
         self.pad_to_tile_grid_check_box.setChecked(config.quantization.pad_to_tile_grid)
 
@@ -209,7 +214,7 @@ class ConfigPanelWidget(QWidget):
         """
         config = ProjectConfig(
             quantization=QuantizationConfig(
-                max_colors=self.max_colors_spin_box.value(),
+                palette_bank_count=self.palette_bank_count_spin_box.value(),
                 dithering_enabled=self.dithering_check_box.isChecked(),
                 quantization_method="median_cut",
                 tile_width=8,

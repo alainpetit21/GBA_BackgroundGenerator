@@ -141,7 +141,7 @@ class ExportService:
         image = self.preview_renderer.render_tilemap(
             tilemap=result.tilemap,
             tileset=result.tileset,
-            palette=result.palette,
+            palette_set=result.palette_set,
         )
         image.save(output_path, format="PNG")
 
@@ -159,7 +159,8 @@ class ExportService:
         """
         image = self.preview_renderer.render_tileset(
             tileset=result.tileset,
-            palette=result.palette,
+            palette_set=result.palette_set,
+            tilemap=result.tilemap,
         )
         image.save(output_path, format="PNG")
 
@@ -169,7 +170,7 @@ class ExportService:
         output_path: Path,
     ) -> None:
         """
-        Export the tilemap as CSV using tile indices only.
+        Export the tilemap as CSV including tile index, palette bank, and flip flags.
 
         Args:
             result: Processing result to export.
@@ -190,7 +191,7 @@ class ExportService:
             output_path: Destination path.
         """
         palette_bytes = self.binary_encoder.encode_palette_4bpp(
-            palette=result.palette,
+            palette_set=result.palette_set,
             pad_to_16=True,
         )
         output_path.write_bytes(palette_bytes)
@@ -224,7 +225,6 @@ class ExportService:
         """
         map_bytes = self.binary_encoder.encode_text_bg_map(
             tilemap=result.tilemap,
-            palette_bank=0,
         )
         output_path.write_bytes(map_bytes)
 
@@ -252,6 +252,7 @@ class ExportService:
             f"#define {symbol_name.upper()}_MAP_WIDTH {result.map_width_in_tiles()}\n"
             f"#define {symbol_name.upper()}_MAP_HEIGHT {result.map_height_in_tiles()}\n"
             f"#define {symbol_name.upper()}_TILE_COUNT {result.unique_tile_count()}\n"
+            f"#define {symbol_name.upper()}_PALETTE_BANK_COUNT {result.palette_bank_count()}\n"
             f"#define {symbol_name.upper()}_PALETTE_COLOR_COUNT {result.palette_color_count()}\n\n"
             f"#endif\n"
         )

@@ -4,6 +4,7 @@ Processing pipeline service for the GBA Tile Quantizer.
 
 from __future__ import annotations
 from pathlib import Path
+from typing import Callable, Optional
 
 from config.ProjectConfig import ProjectConfig
 from domain.ProcessingResult import ProcessingResult
@@ -55,6 +56,7 @@ class ProcessingPipeline:
         self,
         image_path: str | Path,
         config: ProjectConfig,
+        progress_callback: Optional[Callable[[int, str], None]] = None,
     ) -> ProcessingResult:
         """
         Run the full processing pipeline for a single image.
@@ -73,54 +75,72 @@ class ProcessingPipeline:
             raise ValueError("config cannot be None.")
 
         config.validate()
+        self._report_progress(progress_callback, 0, "Starting processing...")
 
         source_image = self.image_loader.load(image_path)
+        self._report_progress(progress_callback, 10, "Loaded source image.")
 
         preprocessed_image = self.image_preprocessor.preprocess(
             image=source_image,
             config=config.quantization,
         )
+        self._report_progress(progress_callback, 25, "Preprocessed image.")
 
-        indexed_image = self.palette_quantizer.quantize(
+        quantized_image = self.palette_quantizer.quantize(
             image=preprocessed_image,
             config=config.quantization,
         )
-
-        extraction_result = self.tile_extractor.extract(
-            indexed_image=indexed_image,
-            tile_width=config.quantization.tile_width,
-            tile_height=config.quantization.tile_height,
-        )
+        self._report_progress(progress_callback, 45, "Quantized palette.")
 
         deduplication_result = self.tile_deduplicator.deduplicate(
-            tiles=extraction_result.tiles,
-            tilemap=extraction_result.tilemap,
+            tiles=quantized_image.tiles,
+            tilemap=quantized_image.tilemap,
             config=config.tile_reduction,
         )
+        self._report_progress(progress_callback, 60, "Deduplicated tiles.")
 
         reduction_result = self.tile_reducer.reduce(
             tileset=deduplication_result.tileset,
             tilemap=deduplication_result.tilemap,
-            palette=indexed_image.palette,
+            palette_set=quantized_image.palette_set,
             config=config.tile_reduction,
         )
+        self._report_progress(progress_callback, 78, "Reduced tileset.")
 
         preview_image_bytes = self.preview_renderer.render_tilemap_to_png_bytes(
             tilemap=reduction_result.tilemap,
             tileset=reduction_result.tileset,
-            palette=indexed_image.palette,
+            palette_set=quantized_image.palette_set,
         )
+        self._report_progress(progress_callback, 93, "Rendered map preview.")
 
         tileset_preview_image_bytes = self.preview_renderer.render_tileset_to_png_bytes(
             tileset=reduction_result.tileset,
-            palette=indexed_image.palette,
+            palette_set=quantized_image.palette_set,
+            tilemap=reduction_result.tilemap,
         )
+        self._report_progress(progress_callback, 100, "Rendered tileset preview.")
 
         return ProcessingResult(
-            indexed_image=indexed_image,
-            palette=indexed_image.palette,
+            image_width=quantized_image.image_width,
+            image_height=quantized_image.image_height,
+            palette_set=quantized_image.palette_set,
             tileset=reduction_result.tileset,
             tilemap=reduction_result.tilemap,
             preview_image_bytes=preview_image_bytes,
             tileset_preview_image_bytes=tileset_preview_image_bytes,
         )
+
+    def _report_progress(
+        self,
+        progress_callback: Optional[Callable[[int, str], None]],
+        value: int,
+        message: str,
+    ) -> None:
+        """
+        Emit a progress update if a callback is provided.
+        """
+        if progress_callback is None:
+            return
+
+        progress_callback(value, message)
