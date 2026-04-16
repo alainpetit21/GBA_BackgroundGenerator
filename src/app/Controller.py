@@ -7,7 +7,7 @@ the UI can trigger and stores the current application state.
 """
 from __future__ import annotations
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from config.ExportConfig import ExportConfig
 from config.ProjectConfig import ProjectConfig
@@ -146,7 +146,11 @@ class Controller:
 
         self.current_result = result
 
-    def export_result(self, output_directory: str) -> str:
+    def export_result(
+        self,
+        output_directory: str,
+        progress_callback: Optional[Callable[[int, str], None]] = None,
+    ) -> str:
         """
         Export the current processing result.
 
@@ -175,6 +179,7 @@ class Controller:
             result=self.current_result,
             output_directory=normalized_output_directory,
             config=self.project_config.export,
+            progress_callback=progress_callback,
         )
 
         return f"Export complete. Wrote {len(exported_files)} file(s)."

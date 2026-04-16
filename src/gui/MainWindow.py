@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Optional
 from PySide6.QtCore import Qt, QThread
 from PySide6.QtGui import QAction, QPixmap
-from PySide6.QtWidgets import QFileDialog, QMainWindow, QMessageBox, QPushButton, QSplitter, QTextEdit, QToolBar, \
-    QVBoxLayout, QWidget, QHBoxLayout, QGroupBox, QLabel, QProgressBar
+from PySide6.QtWidgets import QApplication, QFileDialog, QMainWindow, QMessageBox, QPushButton, QSplitter, QTextEdit, \
+    QToolBar, QVBoxLayout, QWidget, QHBoxLayout, QGroupBox, QLabel, QProgressBar
 
 from app.Controller import Controller
 from config.ProjectConfig import ProjectConfig
@@ -46,6 +46,7 @@ class MainWindow(QMainWindow):
         self.processing_thread: Optional[QThread] = None
         self.processing_worker: Optional[ProcessingWorker] = None
         self.is_processing = False
+        self.is_exporting = False
 
         self._build_ui()
         self._refresh_ui_state()
@@ -263,11 +264,22 @@ class MainWindow(QMainWindow):
 
         try:
             self._apply_config_from_ui()
+            self.is_exporting = True
+            self._set_progress(0, "Starting export...")
+            self._refresh_ui_state()
 
-            message = self.controller.export_result(output_directory)
+            message = self.controller.export_result(
+                output_directory,
+                progress_callback=self._on_export_progress,
+            )
             self._log(message)
+            self._set_progress(100, "Export complete.")
         except Exception as exception:  # noqa: BLE001
+            self._set_progress(0, "Export failed.")
             self._show_error("Export Error", str(exception), exception=exception)
+        finally:
+            self.is_exporting = False
+            self._refresh_ui_state()
 
     def _on_about_clicked(self) -> None:
         QMessageBox.information(
@@ -322,15 +334,16 @@ class MainWindow(QMainWindow):
     def _refresh_ui_state(self) -> None:
         has_loaded_image = self.controller.has_loaded_image()
         has_result = self.controller.has_result()
-        can_process = has_loaded_image and not self.is_processing
-        can_export = has_result and not self.is_processing
+        is_busy = self.is_processing or self.is_exporting
+        can_process = has_loaded_image and not is_busy
+        can_export = has_result and not is_busy
 
-        self.load_image_action.setEnabled(not self.is_processing)
+        self.load_image_action.setEnabled(not is_busy)
         self.process_image_action.setEnabled(can_process)
         self.export_action.setEnabled(can_export)
 
         if self.load_button is not None:
-            self.load_button.setEnabled(not self.is_processing)
+            self.load_button.setEnabled(not is_busy)
         if self.process_button is not None:
             self.process_button.setEnabled(can_process)
 
@@ -338,7 +351,7 @@ class MainWindow(QMainWindow):
             self.export_button.setEnabled(can_export)
 
         if self.config_panel_widget is not None:
-            self.config_panel_widget.setEnabled(not self.is_processing)
+            self.config_panel_widget.setEnabled(not is_busy)
 
     def _start_processing(self, image_path: Path, config: ProjectConfig) -> None:
         if self.processing_thread is not None:
@@ -410,6 +423,10 @@ class MainWindow(QMainWindow):
         if self.progress_bar is not None:
             self.progress_bar.setVisible(True)
             self.progress_bar.setValue(value)
+
+    def _on_export_progress(self, value: int, message: str) -> None:
+        self._set_progress(value, message)
+        QApplication.processEvents()
 
     def _log(self, message: str) -> None:
         if self.log_text_edit is None:

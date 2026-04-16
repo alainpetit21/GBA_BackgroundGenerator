@@ -242,8 +242,31 @@ class PreviewRenderer:
         if tilemap is None:
             return palette_bank_map
 
+        usage_counts: dict[int, dict[int, int]] = {
+            tile_index: {}
+            for tile_index in range(tileset_size)
+        }
+
         for entry in tilemap.entries:
-            palette_bank_map.setdefault(entry.tile_index, entry.palette_bank)
+            if entry.tile_index < 0 or entry.tile_index >= tileset_size:
+                continue
+
+            per_tile_counts = usage_counts[entry.tile_index]
+            per_tile_counts[entry.palette_bank] = (
+                per_tile_counts.get(entry.palette_bank, 0) + 1
+            )
+
+        for tile_index in range(tileset_size):
+            per_tile_counts = usage_counts[tile_index]
+            if not per_tile_counts:
+                continue
+
+            # Use the most frequent bank seen for this tile index.
+            # In a tie, pick the smaller bank id for stability.
+            palette_bank_map[tile_index] = min(
+                per_tile_counts,
+                key=lambda bank: (-per_tile_counts[bank], bank),
+            )
 
         return palette_bank_map
 

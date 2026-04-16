@@ -4,6 +4,7 @@ Export service for the GBA Tile Quantizer.
 
 from __future__ import annotations
 from pathlib import Path
+from typing import Callable, Optional
 
 from config.ExportConfig import ExportConfig
 from domain.ProcessingResult import ProcessingResult
@@ -36,6 +37,7 @@ class ExportService:
         result: ProcessingResult,
         output_directory: str | Path,
         config: ExportConfig,
+        progress_callback: Optional[Callable[[int, str], None]] = None,
     ) -> list[Path]:
         """
         Export the processing result to disk.
@@ -64,44 +66,111 @@ class ExportService:
 
         exported_files: list[Path] = []
         base_name = config.output_name.strip()
+        export_steps: list[tuple[str, Path, Callable[[], None]]] = []
 
         if config.export_preview_png:
             preview_path = normalized_output_directory / f"{base_name}_preview.png"
-            self._export_preview_png(result, preview_path)
-            exported_files.append(preview_path)
+            export_steps.append(
+                (
+                    "preview PNG",
+                    preview_path,
+                    lambda: self._export_preview_png(result, preview_path),
+                )
+            )
 
         if config.export_tileset_png:
             tileset_preview_path = (
                 normalized_output_directory / f"{base_name}_tileset.png"
             )
-            self._export_tileset_png(result, tileset_preview_path)
-            exported_files.append(tileset_preview_path)
+            export_steps.append(
+                (
+                    "tileset PNG",
+                    tileset_preview_path,
+                    lambda: self._export_tileset_png(result, tileset_preview_path),
+                )
+            )
 
         if config.export_tilemap_csv:
             tilemap_csv_path = normalized_output_directory / f"{base_name}_tilemap.csv"
-            self._export_tilemap_csv(result, tilemap_csv_path)
-            exported_files.append(tilemap_csv_path)
+            export_steps.append(
+                (
+                    "tilemap CSV",
+                    tilemap_csv_path,
+                    lambda: self._export_tilemap_csv(result, tilemap_csv_path),
+                )
+            )
 
         if config.export_palette_binary:
             palette_binary_path = normalized_output_directory / f"{base_name}.pal.bin"
-            self._export_palette_binary(result, palette_binary_path)
-            exported_files.append(palette_binary_path)
+            export_steps.append(
+                (
+                    "palette binary",
+                    palette_binary_path,
+                    lambda: self._export_palette_binary(result, palette_binary_path),
+                )
+            )
 
         if config.export_tiles_binary:
             tiles_binary_path = normalized_output_directory / f"{base_name}.tiles.bin"
-            self._export_tiles_binary(result, tiles_binary_path)
-            exported_files.append(tiles_binary_path)
+            export_steps.append(
+                (
+                    "tiles binary",
+                    tiles_binary_path,
+                    lambda: self._export_tiles_binary(result, tiles_binary_path),
+                )
+            )
 
             map_binary_path = normalized_output_directory / f"{base_name}.map.bin"
-            self._export_map_binary(result, map_binary_path)
-            exported_files.append(map_binary_path)
+            export_steps.append(
+                (
+                    "map binary",
+                    map_binary_path,
+                    lambda: self._export_map_binary(result, map_binary_path),
+                )
+            )
 
         if config.export_c_header:
             c_header_path = normalized_output_directory / f"{base_name}.h"
-            self._export_c_header(result, c_header_path, base_name)
-            exported_files.append(c_header_path)
+            export_steps.append(
+                (
+                    "C header",
+                    c_header_path,
+                    lambda: self._export_c_header(result, c_header_path, base_name),
+                )
+            )
+
+        self._report_progress(progress_callback, 0, "Starting export...")
+        step_count = len(export_steps)
+        for step_index, (step_name, output_path, action) in enumerate(export_steps, start=1):
+            start_value = int(((step_index - 1) * 100) / step_count)
+            self._report_progress(
+                progress_callback,
+                start_value,
+                f"Exporting {step_name} ({step_index}/{step_count})...",
+            )
+            action()
+            exported_files.append(output_path)
+            end_value = int((step_index * 100) / step_count)
+            self._report_progress(
+                progress_callback,
+                end_value,
+                f"Exported {step_name} ({step_index}/{step_count}).",
+            )
+
+        self._report_progress(progress_callback, 100, "Export complete.")
 
         return exported_files
+
+    def _report_progress(
+        self,
+        progress_callback: Optional[Callable[[int, str], None]],
+        value: int,
+        message: str,
+    ) -> None:
+        if progress_callback is None:
+            return
+
+        progress_callback(value, message)
 
     def _normalize_output_directory(self, output_directory: str | Path) -> Path:
         """
