@@ -5,6 +5,7 @@ Background worker used to process images without blocking the GUI thread.
 from __future__ import annotations
 
 from pathlib import Path
+import traceback
 
 from PySide6.QtCore import QObject, Signal, Slot
 
@@ -20,7 +21,7 @@ class ProcessingWorker(QObject):
 
     progress_changed = Signal(int, str)
     finished = Signal(object, str)
-    failed = Signal(str)
+    failed = Signal(object)
 
     def __init__(
         self,
@@ -47,4 +48,12 @@ class ProcessingWorker(QObject):
             message = f"Processing complete. {result.summary()}"
             self.finished.emit(result, message)
         except Exception as exception:  # noqa: BLE001
-            self.failed.emit(str(exception))
+            self.failed.emit(
+                {
+                    "message": str(exception),
+                    "exception_type": type(exception).__name__,
+                    "traceback": traceback.format_exc(),
+                    "image_path": str(self.image_path),
+                    "source": "ProcessingWorker.run",
+                },
+            )

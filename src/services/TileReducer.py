@@ -105,6 +105,7 @@ class TileReducer:
         reduced_tileset: TileSet,
         palette_set: PaletteSet,
         source_palette_bank: int,
+        reduced_tileset_palette_banks: list[int],
         config: TileReductionConfig,
     ) -> TileMatch:
         """
@@ -126,27 +127,40 @@ class TileReducer:
         if reduced_tileset.is_empty():
             raise ValueError("Cannot find a replacement in an empty reduced tileset.")
 
-        best_tile_index = 0
+        source_palette = palette_set.get_palette(source_palette_bank)
+        same_bank_candidate_indices = [
+            tile_index
+            for tile_index in range(reduced_tileset.size())
+            if reduced_tileset_palette_banks[tile_index] == source_palette_bank
+        ]
+        candidate_indices = same_bank_candidate_indices
+        if not candidate_indices:
+            candidate_indices = list(range(reduced_tileset.size()))
+
+        best_tile_index = candidate_indices[0]
+        best_palette_bank = reduced_tileset_palette_banks[best_tile_index]
         best_score = self.similarity_calculator.calculate(
             first_tile=source_tile,
-            second_tile=reduced_tileset.get_tile(0),
+            second_tile=reduced_tileset.get_tile(best_tile_index),
             metric=config.similarity_metric,
-            first_palette=palette_set.get_palette(source_palette_bank),
-            second_palette=palette_set.get_palette(source_palette_bank),
+            first_palette=source_palette,
+            second_palette=palette_set.get_palette(best_palette_bank),
         )
 
-        for tile_index in range(1, reduced_tileset.size()):
+        for tile_index in candidate_indices[1:]:
             candidate_tile = reduced_tileset.get_tile(tile_index)
+            candidate_palette_bank = reduced_tileset_palette_banks[tile_index]
             candidate_score = self.similarity_calculator.calculate(
                 first_tile=source_tile,
                 second_tile=candidate_tile,
                 metric=config.similarity_metric,
-                first_palette=palette_set.get_palette(source_palette_bank),
-                second_palette=palette_set.get_palette(source_palette_bank),
+                first_palette=source_palette,
+                second_palette=palette_set.get_palette(candidate_palette_bank),
             )
 
             if candidate_score < best_score:
                 best_tile_index = tile_index
+                best_palette_bank = candidate_palette_bank
                 best_score = candidate_score
 
         return TileMatch(
@@ -154,6 +168,7 @@ class TileReducer:
             horizontal_flip=False,
             vertical_flip=False,
             score=best_score,
+            palette_bank=best_palette_bank,
         )
 
     def _remap_tilemap(
@@ -180,6 +195,11 @@ class TileReducer:
             A new remapped TileMap.
         """
         remapped_tilemap = TileMap(width=tilemap.width, height=tilemap.height)
+        source_tileset_palette_banks = self._build_tileset_palette_banks(
+            tilemap=tilemap,
+            tileset_size=source_tileset.size(),
+        )
+        reduced_tileset_palette_banks = source_tileset_palette_banks[:reduced_tileset.size()]
 
         for y in range(tilemap.height):
             for x in range(tilemap.width):
@@ -193,6 +213,7 @@ class TileReducer:
                         reduced_tileset=reduced_tileset,
                         palette_set=palette_set,
                         source_palette_bank=original_entry.palette_bank,
+                        reduced_tileset_palette_banks=reduced_tileset_palette_banks,
                         config=config,
                     )
 
@@ -212,8 +233,53 @@ class TileReducer:
                         tile_index=remapped_index,
                         horizontal_flip=original_entry.horizontal_flip,
                         vertical_flip=original_entry.vertical_flip,
-                        palette_bank=original_entry.palette_bank,
+                        palette_bank=(
+                            best_match.palette_bank
+                            if original_entry.tile_index >= reduced_tileset.size()
+                            and best_match.palette_bank is not None
+                            else original_entry.palette_bank
+                        ),
                     ),
                 )
 
         return remapped_tilemap
+
+    def _build_tileset_palette_banks(
+        self,
+        tilemap: TileMap,
+        tileset_size: int,
+    ) -> list[int]:
+        """
+        Build a tile-index -> palette-bank mapping from a tilemap.
+
+        Raises:
+            ValueError: If a tile index is out of range or appears with
+                        inconsistent palette-bank assignments.
+        """
+        palette_banks: list[int | None] = [None] * tileset_size
+
+        for entry in tilemap.entries:
+            if entry.tile_index < 0 or entry.tile_index >= tileset_size:
+                raise ValueError(
+                    f"TileMap references invalid tile index {entry.tile_index} for tileset size {tileset_size}."
+                )
+
+            current_bank = palette_banks[entry.tile_index]
+            if current_bank is None:
+                palette_banks[entry.tile_index] = entry.palette_bank
+                continue
+
+            if current_bank != entry.palette_bank:
+                raise ValueError(
+                    "Tile index is referenced with multiple palette banks, which is unsupported for reduction: "
+                    f"tile_index={entry.tile_index}, banks={current_bank} and {entry.palette_bank}."
+                )
+
+        missing_indices = [index for index, bank in enumerate(palette_banks) if bank is None]
+        if missing_indices:
+            raise ValueError(
+                "TileMap is missing palette-bank information for some tile indices: "
+                f"{missing_indices[:16]}"
+            )
+
+        return [bank for bank in palette_banks if bank is not None]

@@ -11,7 +11,7 @@ from config.QuantizationConfig import QuantizationConfig
 from domain.Palette import Palette
 from domain.PaletteSet import PaletteSet
 from domain.Tile import Tile
-from domain.TileMap import TileMap
+from domain.TileMap import TileMap, TileMapEntry
 
 
 @dataclass
@@ -86,6 +86,12 @@ class PaletteQuantizer:
                     palette_bank=palette_bank,
                 )
                 tile_index += 1
+
+        tiles, tilemap, palette_banks = self._consolidate_palette_banks_lossless(
+            tiles=tiles,
+            tilemap=tilemap,
+            palette_banks=palette_banks,
+        )
 
         return QuantizedTileImage(
             image_width=rgb_image.width,
@@ -314,3 +320,100 @@ class PaletteQuantizer:
             + (green_difference * green_difference)
             + (blue_difference * blue_difference)
         )
+
+    def _consolidate_palette_banks_lossless(
+        self,
+        tiles: list[Tile],
+        tilemap: TileMap,
+        palette_banks: list[Palette],
+    ) -> tuple[list[Tile], TileMap, list[Palette]]:
+        """
+        Merge palette banks when they can be combined without color loss.
+
+        This treats palette_bank_count as a maximum and reduces the final
+        number of banks to the smallest value reachable by lossless bank merges.
+        """
+        if len(palette_banks) <= 1:
+            return tiles, tilemap, palette_banks
+
+        mutable_tiles = list(tiles)
+        mutable_entries = list(tilemap.entries)
+        mutable_banks = list(palette_banks)
+
+        merged_in_pass = True
+        while merged_in_pass and len(mutable_banks) > 1:
+            merged_in_pass = False
+
+            for source_bank_index in range(len(mutable_banks) - 1, 0, -1):
+                source_palette = mutable_banks[source_bank_index]
+
+                for target_bank_index in range(source_bank_index):
+                    target_palette = mutable_banks[target_bank_index]
+                    merged_palette = self._try_merge_palettes_lossless(
+                        target_palette=target_palette,
+                        source_palette=source_palette,
+                    )
+                    if merged_palette is None:
+                        continue
+
+                    source_to_merged_index = {
+                        source_index: merged_palette.index_of(source_color)
+                        for source_index, source_color in enumerate(source_palette.colors)
+                    }
+
+                    for entry_index, entry in enumerate(mutable_entries):
+                        if entry.palette_bank != source_bank_index:
+                            continue
+
+                        tile = mutable_tiles[entry.tile_index]
+                        remapped_pixels = [
+                            source_to_merged_index[pixel]
+                            for pixel in tile.pixels
+                        ]
+                        mutable_tiles[entry.tile_index] = Tile(tuple(remapped_pixels))
+                        mutable_entries[entry_index] = TileMapEntry(
+                            tile_index=entry.tile_index,
+                            horizontal_flip=entry.horizontal_flip,
+                            vertical_flip=entry.vertical_flip,
+                            palette_bank=target_bank_index,
+                        )
+
+                    mutable_banks[target_bank_index] = merged_palette
+                    mutable_banks.pop(source_bank_index)
+
+                    for entry_index, entry in enumerate(mutable_entries):
+                        if entry.palette_bank > source_bank_index:
+                            mutable_entries[entry_index] = TileMapEntry(
+                                tile_index=entry.tile_index,
+                                horizontal_flip=entry.horizontal_flip,
+                                vertical_flip=entry.vertical_flip,
+                                palette_bank=entry.palette_bank - 1,
+                            )
+
+                    merged_in_pass = True
+                    break
+
+                if merged_in_pass:
+                    break
+
+        return (
+            mutable_tiles,
+            TileMap(width=tilemap.width, height=tilemap.height, entries=mutable_entries),
+            mutable_banks,
+        )
+
+    def _try_merge_palettes_lossless(
+        self,
+        target_palette: Palette,
+        source_palette: Palette,
+    ) -> Palette | None:
+        merged_colors = list(target_palette.colors)
+
+        for color in source_palette.colors:
+            if color not in merged_colors:
+                merged_colors.append(color)
+
+        if len(merged_colors) > 16:
+            return None
+
+        return Palette(merged_colors)

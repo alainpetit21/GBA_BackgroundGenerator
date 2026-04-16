@@ -120,6 +120,17 @@ class TileSimilarityCalculator:
         score = 0
 
         for first_pixel, second_pixel in zip(first_tile.pixels, second_tile.pixels):
+            self._validate_palette_index(
+                palette=first_palette,
+                index=first_pixel,
+                tile_label="first_tile",
+            )
+            self._validate_palette_index(
+                palette=second_palette,
+                index=second_pixel,
+                tile_label="second_tile",
+            )
+
             first_color = first_palette.get_color(first_pixel)
             second_color = second_palette.get_color(second_pixel)
 
@@ -160,6 +171,17 @@ class TileSimilarityCalculator:
         score = 0
 
         for first_pixel, second_pixel in zip(first_tile.pixels, second_tile.pixels):
+            self._validate_palette_index(
+                palette=first_palette,
+                index=first_pixel,
+                tile_label="first_tile",
+            )
+            self._validate_palette_index(
+                palette=second_palette,
+                index=second_pixel,
+                tile_label="second_tile",
+            )
+
             first_color = first_palette.get_color(first_pixel)
             second_color = second_palette.get_color(second_pixel)
 
@@ -174,3 +196,14 @@ class TileSimilarityCalculator:
             )
 
         return score
+
+    def _validate_palette_index(
+        self,
+        palette: Palette,
+        index: int,
+        tile_label: str,
+    ) -> None:
+        if index < 0 or index >= palette.size():
+            raise ValueError(
+                f"Invalid palette index {index} in {tile_label} for palette size {palette.size()}."
+            )

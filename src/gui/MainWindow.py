@@ -2,6 +2,7 @@
 Main application window for the GBA Tile Quantizer.
 """
 from __future__ import annotations
+import inspect
 from pathlib import Path
 from typing import Optional
 from PySide6.QtCore import Qt, QThread
@@ -15,6 +16,7 @@ from gui.ProcessingWorker import ProcessingWorker
 from gui.widgets.ImagePreviewWidget import ImagePreviewWidget
 from gui.widgets.ConfigPanelWidget import ConfigPanelWidget
 from gui.widgets.PaletteWidget import PaletteWidget
+from utils.DebugLogger import DebugLogger
 
 
 class MainWindow(QMainWindow):
@@ -239,7 +241,7 @@ class MainWindow(QMainWindow):
             self._clear_processed_previews()
             self._refresh_ui_state()
         except Exception as exception:  # noqa: BLE001
-            self._show_error("Load Image Error", str(exception))
+            self._show_error("Load Image Error", str(exception), exception=exception)
 
     def _on_process_clicked(self) -> None:
         try:
@@ -247,7 +249,7 @@ class MainWindow(QMainWindow):
             image_path, config = self.controller.build_processing_request()
             self._start_processing(image_path, config)
         except Exception as exception:  # noqa: BLE001
-            self._show_error("Process Error", str(exception))
+            self._show_error("Process Error", str(exception), exception=exception)
 
     def _on_export_clicked(self) -> None:
         output_directory = QFileDialog.getExistingDirectory(
@@ -265,7 +267,7 @@ class MainWindow(QMainWindow):
             message = self.controller.export_result(output_directory)
             self._log(message)
         except Exception as exception:  # noqa: BLE001
-            self._show_error("Export Error", str(exception))
+            self._show_error("Export Error", str(exception), exception=exception)
 
     def _on_about_clicked(self) -> None:
         QMessageBox.information(
@@ -381,9 +383,13 @@ class MainWindow(QMainWindow):
         if self.palette_widget is not None:
             self.palette_widget.set_palette_set(result.palette_set)
 
-    def _on_processing_failed(self, message: str) -> None:
+    def _on_processing_failed(self, error_payload) -> None:
+        message = str(error_payload)
+        if isinstance(error_payload, dict):
+            message = str(error_payload.get("message", message))
+
         self._set_progress(0, "Processing failed.")
-        self._show_error("Process Error", message)
+        self._show_error("Process Error", message, details=error_payload)
 
     def _cleanup_processing(self) -> None:
         if self.processing_worker is not None:
@@ -411,8 +417,28 @@ class MainWindow(QMainWindow):
 
         self.log_text_edit.append(message)
 
-    def _show_error(self, title: str, message: str) -> None:
+    def _show_error(
+        self,
+        title: str,
+        message: str,
+        *,
+        exception: BaseException | None = None,
+        details=None,
+    ) -> None:
+        caller_frame = inspect.currentframe()
+        if caller_frame is not None:
+            caller_frame = caller_frame.f_back
+
+        debug_log_path = DebugLogger.log_error(
+            title=title,
+            message=message,
+            exception=exception,
+            caller_frame=caller_frame,
+            details=details,
+        )
+
         self._log(f"ERROR: {message}")
+        self._log(f"Debug details saved to: {debug_log_path}")
         QMessageBox.critical(self, title, message)
 
     def _apply_config_from_ui(self) -> None:

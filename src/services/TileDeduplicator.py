@@ -61,16 +61,24 @@ class TileDeduplicator:
 
         unique_tileset = TileSet()
         remapped_tilemap = TileMap(width=tilemap.width, height=tilemap.height)
+        unique_tile_palette_banks: list[int] = []
 
         for y in range(tilemap.height):
             for x in range(tilemap.width):
                 source_entry = tilemap.get_entry(x, y)
                 source_tile = tiles[source_entry.tile_index]
 
-                match = self._find_matching_tile(source_tile, unique_tileset, config)
+                match = self._find_matching_tile(
+                    source_tile=source_tile,
+                    source_palette_bank=source_entry.palette_bank,
+                    unique_tileset=unique_tileset,
+                    unique_tile_palette_banks=unique_tile_palette_banks,
+                    config=config,
+                )
 
                 if match is None:
                     unique_tile_index = unique_tileset.add_tile(source_tile)
+                    unique_tile_palette_banks.append(source_entry.palette_bank)
                     remapped_tilemap.set_entry(
                         x,
                         y,
@@ -101,7 +109,9 @@ class TileDeduplicator:
     def _find_matching_tile(
         self,
         source_tile: Tile,
+        source_palette_bank: int,
         unique_tileset: TileSet,
+        unique_tile_palette_banks: list[int],
         config: TileReductionConfig,
     ) -> TileMatch | None:
         """
@@ -125,6 +135,11 @@ class TileDeduplicator:
             return None
 
         for tile_index, existing_tile in enumerate(unique_tileset.tiles):
+            # Palette indices are bank-local. Two equal index patterns from
+            # different banks are not equivalent in RGB space.
+            if unique_tile_palette_banks[tile_index] != source_palette_bank:
+                continue
+
             if existing_tile == source_tile:
                 return TileMatch(
                     tile_index=tile_index,
